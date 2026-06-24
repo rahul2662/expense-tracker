@@ -6,6 +6,8 @@ const {
   deleteExpense,
   getCategories,
   addCategory,
+  getMerchants,
+  addMerchant,
 } = require('../services/SheetsClient');
 
 const VALID_PAYMENT_MODES = ['Cash', 'UPI', 'Credit Card', 'Debit Card', 'Net Banking'];
@@ -22,31 +24,45 @@ router.get('/expenses', async (req, res, next) => {
   }
 });
 
+async function validateExpenseBody(body) {
+  const { date, amount, category, paymentMode, merchant, remarks } = body;
+
+  if (!date || amount == null || !category) {
+    return 'date, amount, and category are required';
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return 'date must be YYYY-MM-DD';
+  }
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return 'amount must be a positive number';
+  }
+  if (!paymentMode || !VALID_PAYMENT_MODES.includes(paymentMode)) {
+    return `paymentMode must be one of: ${VALID_PAYMENT_MODES.join(', ')}`;
+  }
+
+  const known = await getCategories();
+  if (!known.some((k) => k.toLowerCase() === category.trim().toLowerCase())) {
+    return `Unknown category: ${category}`;
+  }
+
+  return null;
+}
+
 router.post('/expenses', async (req, res, next) => {
   try {
-    const { date, amount, categories, paymentMode, remarks } = req.body;
+    const validationError = await validateExpenseBody(req.body);
+    if (validationError) return res.status(400).json({ error: validationError });
 
-    if (!date || amount == null || !Array.isArray(categories) || categories.length === 0) {
-      return res.status(400).json({ error: 'date, amount, and at least one category are required' });
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
-    }
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ error: 'amount must be a positive number' });
-    }
-    if (!paymentMode || !VALID_PAYMENT_MODES.includes(paymentMode)) {
-      return res.status(400).json({ error: `paymentMode must be one of: ${VALID_PAYMENT_MODES.join(', ')}` });
-    }
-
-    const known = await getCategories();
-    const unknown = categories.filter((c) => !known.some((k) => k.toLowerCase() === c.toLowerCase()));
-    if (unknown.length > 0) {
-      return res.status(400).json({ error: `Unknown categories: ${unknown.join(', ')}` });
-    }
-
-    const expense = await addExpense({ date, amount: parsedAmount, categories, paymentMode, remarks });
+    const { date, amount, category, paymentMode, merchant, remarks } = req.body;
+    const expense = await addExpense({
+      date,
+      amount: parseFloat(amount),
+      category: category.trim(),
+      paymentMode,
+      merchant: merchant ? merchant.trim() : '',
+      remarks,
+    });
     res.status(201).json(expense);
   } catch (err) {
     next(err);
@@ -60,29 +76,18 @@ router.put('/expenses/:rowIndex', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid rowIndex' });
     }
 
-    const { date, amount, categories, paymentMode, remarks } = req.body;
+    const validationError = await validateExpenseBody(req.body);
+    if (validationError) return res.status(400).json({ error: validationError });
 
-    if (!date || amount == null || !Array.isArray(categories) || categories.length === 0) {
-      return res.status(400).json({ error: 'date, amount, and at least one category are required' });
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
-    }
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ error: 'amount must be a positive number' });
-    }
-    if (!paymentMode || !VALID_PAYMENT_MODES.includes(paymentMode)) {
-      return res.status(400).json({ error: `paymentMode must be one of: ${VALID_PAYMENT_MODES.join(', ')}` });
-    }
-
-    const known = await getCategories();
-    const unknown = categories.filter((c) => !known.some((k) => k.toLowerCase() === c.toLowerCase()));
-    if (unknown.length > 0) {
-      return res.status(400).json({ error: `Unknown categories: ${unknown.join(', ')}` });
-    }
-
-    const expense = await updateExpense(rowIndex, { date, amount: parsedAmount, categories, paymentMode, remarks });
+    const { date, amount, category, paymentMode, merchant, remarks } = req.body;
+    const expense = await updateExpense(rowIndex, {
+      date,
+      amount: parseFloat(amount),
+      category: category.trim(),
+      paymentMode,
+      merchant: merchant ? merchant.trim() : '',
+      remarks,
+    });
     res.json(expense);
   } catch (err) {
     next(err);
@@ -119,6 +124,28 @@ router.post('/categories', async (req, res, next) => {
     }
     const categories = await addCategory(name);
     res.status(201).json(categories);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/merchants', async (req, res, next) => {
+  try {
+    const merchants = await getMerchants();
+    res.json(merchants);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/merchants', async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    const merchants = await addMerchant(name);
+    res.status(201).json(merchants);
   } catch (err) {
     next(err);
   }

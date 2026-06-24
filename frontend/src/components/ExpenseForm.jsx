@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Banknote, CreditCard, Smartphone, Globe, Wallet } from 'lucide-react';
-import { addExpense, getCategories } from '../api';
+import { Banknote, CreditCard, Smartphone, Globe, Wallet, Plus } from 'lucide-react';
+import { addExpense, getCategories, getMerchants, addMerchant } from '../api';
 import { categoryColor } from '../utils';
 
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -15,26 +15,41 @@ const PAYMENT_MODES = [
 
 export default function ExpenseForm() {
   const [allCategories, setAllCategories] = useState([]);
+  const [allMerchants, setAllMerchants] = useState([]);
   const [form, setForm] = useState({ date: today(), amount: '', remarks: '' });
-  const [selected, setSelected] = useState([]);
+  const [category, setCategory] = useState('');
+  const [merchant, setMerchant] = useState('');
   const [paymentMode, setPaymentMode] = useState('');
+  const [newMerchant, setNewMerchant] = useState('');
+  const [addingMerchant, setAddingMerchant] = useState(false);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     getCategories().then(setAllCategories).catch(() => {});
+    getMerchants().then(setAllMerchants).catch(() => {});
   }, []);
 
-  function toggleCategory(cat) {
-    setSelected((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
+  async function handleAddMerchant() {
+    const trimmed = newMerchant.trim();
+    if (!trimmed) return;
+    setAddingMerchant(true);
+    try {
+      const updated = await addMerchant(trimmed);
+      setAllMerchants(updated);
+      setMerchant(trimmed);
+      setNewMerchant('');
+    } catch {
+      // silently ignore duplicate
+    } finally {
+      setAddingMerchant(false);
+    }
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (selected.length === 0) {
-      setStatus({ type: 'error', message: 'Select at least one category.' });
+    if (!category) {
+      setStatus({ type: 'error', message: 'Select a category.' });
       return;
     }
     if (!paymentMode) {
@@ -44,10 +59,11 @@ export default function ExpenseForm() {
     setLoading(true);
     setStatus(null);
     try {
-      await addExpense({ ...form, amount: parseFloat(form.amount), categories: selected, paymentMode });
+      await addExpense({ ...form, amount: parseFloat(form.amount), category, paymentMode, merchant });
       setStatus({ type: 'success', message: 'Expense saved successfully.' });
       setForm({ date: today(), amount: '', remarks: '' });
-      setSelected([]);
+      setCategory('');
+      setMerchant('');
       setPaymentMode('');
     } catch (err) {
       setStatus({ type: 'error', message: err.message });
@@ -112,30 +128,84 @@ export default function ExpenseForm() {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Categories</label>
-              {selected.length > 0 && (
-                <span className="text-xs font-medium text-indigo-600">{selected.length} selected</span>
+              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Category</label>
+              {category && (
+                <button type="button" onClick={() => setCategory('')}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+                  Clear
+                </button>
               )}
             </div>
             <div className="flex flex-wrap gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 min-h-[52px]">
               {allCategories.map((cat) => {
-                const active = selected.includes(cat);
+                const active = category === cat;
                 return (
                   <button
                     key={cat}
                     type="button"
-                    onClick={() => toggleCategory(cat)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    onClick={() => setCategory(active ? '' : cat)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                       active
-                        ? 'bg-indigo-600 text-white shadow-sm'
+                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-200'
                         : `${categoryColor(cat)} hover:opacity-80`
                     }`}
                   >
-                    {active && <CheckCircle2 className="w-3 h-3" />}
                     {cat}
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">
+                Merchant
+                <span className="normal-case font-normal text-slate-400 ml-1">(optional)</span>
+              </label>
+              {merchant && (
+                <button type="button" onClick={() => setMerchant('')}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 min-h-[52px]">
+              {allMerchants.map((m) => {
+                const active = merchant === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMerchant(active ? '' : m)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      active
+                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-200'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={newMerchant}
+                  onChange={(e) => setNewMerchant(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMerchant(); } }}
+                  placeholder="Add new…"
+                  className="w-24 border border-dashed border-slate-300 rounded-full px-2.5 py-1 text-xs bg-transparent focus:outline-none focus:border-indigo-400 text-slate-500 placeholder-slate-300"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddMerchant}
+                  disabled={addingMerchant || !newMerchant.trim()}
+                  className="p-1 rounded-full text-slate-400 hover:text-indigo-600 disabled:opacity-30 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 

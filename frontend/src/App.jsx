@@ -1,18 +1,24 @@
 import { useState } from 'react';
-import { PlusCircle, ReceiptText, BarChart3, Tags, Wallet } from 'lucide-react';
+import { PlusCircle, ReceiptText, BarChart3, Tags, Wallet, Store, Upload } from 'lucide-react';
 import ExpenseForm from './components/ExpenseForm';
 import ExpenseTable from './components/ExpenseTable';
 import CategoryManager from './components/CategoryManager';
+import MerchantManager from './components/MerchantManager';
+import ImportStatement from './components/ImportStatement';
 import CategoryChart from './components/CategoryChart';
 import TrendChart from './components/TrendChart';
 import PaymentModeChart from './components/PaymentModeChart';
-import { getAnalysis } from './api';
+import DailySpendChart from './components/DailySpendChart';
+import RecurringChart from './components/RecurringChart';
+import { getAnalysis, getExpenses } from './api';
 
 const NAV = [
   { id: 'add',        label: 'Add Expense', Icon: PlusCircle  },
   { id: 'expenses',   label: 'Expenses',    Icon: ReceiptText },
   { id: 'analysis',   label: 'Analysis',    Icon: BarChart3   },
   { id: 'categories', label: 'Categories',  Icon: Tags        },
+  { id: 'merchants',  label: 'Merchants',   Icon: Store       },
+  { id: 'import',     label: 'Import',      Icon: Upload      },
 ];
 
 const PAGE_TITLES = {
@@ -20,6 +26,8 @@ const PAGE_TITLES = {
   expenses: 'Expenses',
   analysis: 'Analysis',
   categories: 'Categories',
+  merchants: 'Merchants',
+  import:    'Import Statement',
 };
 
 function monthStart() {
@@ -42,6 +50,7 @@ function AnalysisView() {
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
   const [analysis, setAnalysis] = useState(null);
+  const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -49,7 +58,12 @@ function AnalysisView() {
     setLoading(true);
     setError(null);
     try {
-      setAnalysis(await getAnalysis({ from, to }));
+      const [analysisData, expenseData] = await Promise.all([
+        getAnalysis({ from, to }),
+        getExpenses({ from, to }),
+      ]);
+      setAnalysis(analysisData);
+      setExpenses(expenseData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -59,6 +73,7 @@ function AnalysisView() {
 
   const topCat = analysis?.byCategory[0];
   const topMode = analysis?.byPaymentMode[0];
+  const topMerchant = analysis?.byMerchant?.[0];
 
   return (
     <div className="space-y-6">
@@ -101,21 +116,32 @@ function AnalysisView() {
               sub={topMode ? `₹${topMode.total.toLocaleString('en-IN')}` : 'no data'}
             />
             <StatCard
-              label="Categories"
-              value={analysis.byCategory.length}
-              sub="with spend"
+              label="Top Merchant"
+              value={topMerchant?.merchant ?? '—'}
+              sub={topMerchant ? `₹${topMerchant.total.toLocaleString('en-IN')}` : 'no data'}
             />
           </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-              <CategoryChart data={analysis.byCategory} />
+              <CategoryChart data={analysis.byCategory} byCategoryMerchant={analysis.byCategoryMerchant} expenses={expenses} />
             </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+              <DailySpendChart data={analysis.byDay} expenses={expenses} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <PaymentModeChart data={analysis.byPaymentMode} />
             </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+              <TrendChart data={analysis.byMonth} />
+            </div>
           </div>
+
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <TrendChart data={analysis.byMonth} />
+            <RecurringChart data={analysis.recurring} expenses={expenses} />
           </div>
         </>
       )}
@@ -168,12 +194,14 @@ export default function App() {
 
       {/* Main content */}
       <main className="ml-60 flex-1 min-h-screen px-8 py-8">
-        <div className="max-w-4xl">
+        <div className={tab === 'import' ? 'w-full' : tab === 'analysis' ? 'max-w-6xl' : 'max-w-4xl'}>
           <h1 className="text-2xl font-bold text-slate-900 mb-6">{PAGE_TITLES[tab]}</h1>
           {tab === 'add'        && <ExpenseForm />}
           {tab === 'expenses'   && <ExpenseTable />}
           {tab === 'analysis'   && <AnalysisView />}
           {tab === 'categories' && <CategoryManager />}
+          {tab === 'merchants'  && <MerchantManager />}
+          {tab === 'import'     && <ImportStatement />}
         </div>
       </main>
     </div>

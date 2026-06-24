@@ -4,6 +4,7 @@ const cors = require('cors');
 const { ensureSheetStructure } = require('./services/SheetsClient');
 const expensesRouter = require('./routes/expenses');
 const analysisRouter = require('./routes/analysis');
+const importRouter   = require('./routes/import');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,6 +18,7 @@ app.use(express.json());
 
 app.use('/api', expensesRouter);
 app.use('/api', analysisRouter);
+app.use('/api', importRouter);
 
 // Central error handler
 app.use((err, req, res, _next) => {

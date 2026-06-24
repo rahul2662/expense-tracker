@@ -59,6 +59,49 @@ export async function addCategory(name) {
   return res.json();
 }
 
+export async function getMerchants() {
+  const res = await fetch(`${BASE}/merchants`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function addMerchant(name) {
+  const res = await fetch(`${BASE}/merchants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function previewImport(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/import/preview`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function confirmImport(rows) {
+  const res = await fetch(`${BASE}/import/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rows }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
 export async function getAnalysis({ from, to } = {}) {
   const params = new URLSearchParams();
   if (from) params.set('from', from);
